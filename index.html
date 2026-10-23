@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>PeerLink — Serverless WebRTC</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <section id="namePage">
+      <h1>PeerLink</h1>
+      <p class="muted">
+        Serverless WebRTC peer connection with manual signaling.
+      </p>
+      <div class="panel">
+        <h2>Welcome</h2>
+        <form id="joinForm">
+          <label for="displayName">Enter your name</label
+          ><input
+            id="displayName"
+            maxlength="40"
+            placeholder="e.g. Alex"
+            autocomplete="nickname"
+            required
+          />
+          <p><button type="submit">Continue</button></p>
+        </form>
+      </div>
+    </section>
+    <section id="appPage" class="hidden">
+      <h1>PeerLink</h1>
+      <p>
+        Signed in as <strong id="myName"></strong>
+      </p>
+      <div class="panel signaling">
+        <h2>Signaling exchange</h2>
+        <p class="muted">
+          Send the copied offer to the other user. They copy it and click step 2,
+          then send their copied answer back. Copy their answer and click step 3.
+          Clipboard access requires HTTPS or localhost and browser permission.
+        </p>
+        <div class="row" aria-label="Signaling actions">
+          <button id="createOffer" type="button">1. Create offer and copy</button>
+          <button id="applyOffer" type="button">2. Apply offer and copy answer</button>
+          <button id="applyAnswer" type="button">3. Apply answer</button>
+        </div>
+        <p id="signalStatus" class="muted" aria-live="polite">Ready.</p>
+      </div>
+      <div class="panel chat-workspace">
+        <aside aria-label="Connected users">
+          <h2>Connected users <span id="userCount" class="pill">0</span></h2>
+          <div id="users">
+            <p class="muted">
+              No connected users yet. Exchange an offer and answer with another
+              browser.
+            </p>
+          </div>
+        </aside>
+        <section class="conversation" aria-labelledby="chatTitle">
+          <h2 id="chatTitle">Live chat</h2>
+          <p id="chatEmpty" class="muted">Select a connected user to start chatting.</p>
+          <div id="chatLog" role="log" aria-live="polite" aria-relevant="additions text"></div>
+          <label for="chatMessage">Message</label>
+          <div class="row">
+            <input id="chatMessage" placeholder="Type a message…" disabled />
+            <input id="attachmentInput" type="file" hidden />
+            <button id="attachFile" class="attachment-button" type="button" aria-label="Attach a file" title="Attach a file" disabled>📎</button>
+            <button id="sendMessage" type="button" disabled>Send</button>
+          </div>
+          <p class="muted">Live only. Messages disappear on disconnect. Files save directly to your chosen destination; receiving requires Chrome or Edge on HTTPS or localhost. Saving to an existing file replaces it after confirmation.</p>
+        </section>
+      </div>
+      <p class="muted">
+        No server-based discovery is provided. Connected users are peers you
+        explicitly connect to. STUN helps with network connectivity; it does not
+        discover users.
+      </p>
+    </section>
+    <script src="./file-transfer.js"></script>
+    <script src="./script.js"></script>
+  </body>
+</html>
