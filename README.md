@@ -1,6 +1,6 @@
 # PeerLink
 
-Peer-to-peer chat and file sharing between devices. No server involved.
+FAST Peer-to-peer chat and file sharing between devices. No server involved.
 
 ## How to connect
 
