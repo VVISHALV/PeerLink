@@ -1,4 +1,5 @@
 /// <reference path="./file-transfer.js" />
+
 const $ = (id) => document.getElementById(id);
 let myName = "",
   peers = new Map(),
