@@ -157,7 +157,7 @@ function setupChannel(peer, ch) {
 function makePeer(name = "") {
   const id = "peer-" + nextId++,
     pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      iceServers: [],
     });
   const p = { id, name, pc, channel: null, messages: [] };
   peers.set(id, p);
