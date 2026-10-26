@@ -27,6 +27,18 @@ body {
   min-height: 100vh;
 }
 
+.version-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-bottom: 20px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
 h1 {
   margin: 0 0 4px;
   color: var(--accent);
