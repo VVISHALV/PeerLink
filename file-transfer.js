@@ -1,8 +1,8 @@
 /* Each file uses its own ordered, reliable channel; no file is buffered in full. */
 class FileTransfer {
   static prefix = "peerlink-file:";
-  static chunkSize = 16 * 1024;
-  static highWater = 256 * 1024;
+  static chunkSize = 256 * 1024;
+  static highWater = 1024 * 1024;
 
   constructor(channel, { file = null, onUpdate = () => {} } = {}) {
     this.channel = channel;
