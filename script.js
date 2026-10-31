@@ -2,12 +2,12 @@
 
 const $ = (id) => document.getElementById(id);
 let myName = "",
+  myId = null,
+  socket = null,
   peers = new Map(),
-  pendingPeerId = "",
-  nextId = 1,
   activePeerId = "";
 
-function status(s) {
+function setStatus(s) {
   console.log("[Connection] Status:", s);
   $("signalStatus").textContent = s;
 }
@@ -106,7 +106,7 @@ function refresh() {
     const p = document.createElement("p");
     p.className = "muted";
     p.textContent =
-      "No connected users yet. Exchange an offer and answer with another browser.";
+      "No connected user yet. Enter the other user's ID to connect.";
     box.append(p);
   }
 
@@ -117,7 +117,7 @@ function refresh() {
     row.setAttribute("aria-pressed", String(activePeerId === p.id));
     row.setAttribute("aria-controls", "chatLog");
     const name = document.createElement("strong");
-    name.textContent = p.name || "Peer";
+    name.textContent = `${p.name || "Peer"} · ID ${p.id}`;
     const state = document.createElement("span");
     state.className = "muted";
     state.textContent = "Connected";
@@ -130,18 +130,20 @@ function refresh() {
     row.append(name, state);
     box.append(row);
   });
+  updateConnectionControls();
   renderChat();
 }
 
-function removePeer(peer) {
-  if (!peers.delete(peer.id)) return;
+function removePeer(peer, notify = true) {
+  if (peers.get(peer.id) !== peer || !peers.delete(peer.id)) return;
+  if (notify) sendSignal({ type: "disconnect", to: peer.id });
+  updateConnectionControls();
   console.log("[Connection] Removing peer:", peer.id, { name: peer.name, connectionState: peer.pc.connectionState, signalingState: peer.pc.signalingState, channelState: peer.channel?.readyState });
   peer.messages.forEach((message) => message.transfer?.cancel());
   peer.messages.length = 0;
-  if (pendingPeerId === peer.id) pendingPeerId = "";
   if (peer.channel && peer.channel.readyState !== "closed") peer.channel.close();
   if (peer.pc.connectionState !== "closed") peer.pc.close();
-  status((peer.name || "Peer") + " disconnected.");
+  setStatus((peer.name || "Peer") + " disconnected.");
   refresh();
 }
 function setupChannel(peer, ch) {
@@ -149,7 +151,8 @@ function setupChannel(peer, ch) {
   console.log("[Connection] Chat channel attached:", peer.id, { label: ch.label, id: ch.id, readyState: ch.readyState, ordered: ch.ordered, protocol: ch.protocol });
   ch.onopen = () => {
     console.log("[Connection] Chat channel open:", peer.id, { label: ch.label, id: ch.id, readyState: ch.readyState });
-    status("Connected to " + (peer.name || "peer"));
+    setStatus(`Connected to ${peer.name || "peer"} (ID ${peer.id}).`);
+    updateConnectionControls();
     refresh();
   };
   ch.onclosing = () => console.log("[Connection] Chat channel closing:", peer.id, ch.readyState);
@@ -159,26 +162,27 @@ function setupChannel(peer, ch) {
   };
   ch.onerror = (event) => {
     console.error("[Connection] Chat channel error:", peer.id, event.error, event);
-    status("Data channel error for " + (peer.name || "peer"));
+    setStatus("Data channel error for " + (peer.name || "peer"));
   };
   ch.onmessage = (e) => addMessage(peer, e.data);
   refresh();
 }
 
-function makePeer(name = "") {
-  const id = "peer-" + nextId++,
-    pc = new RTCPeerConnection({
+function makePeer(id, name = "") {
+  const pc = new RTCPeerConnection({
       // iceServers: [],
       iceServers: [{urls:"stun:stun.l.google.com:19302"}],
     });
-  const p = { id, name, pc, channel: null, messages: [] };
+  const p = { id, name, pc, channel: null, messages: [], candidates: [] };
   peers.set(id, p);
   console.log("[Connection] Peer created:", id, { name, configuration: pc.getConfiguration(), connectionState: pc.connectionState, signalingState: pc.signalingState, iceConnectionState: pc.iceConnectionState, iceGatheringState: pc.iceGatheringState });
   pc.onsignalingstatechange = () => console.log("[Connection] Signaling state:", id, pc.signalingState);
   pc.oniceconnectionstatechange = () => console.log("[Connection] ICE connection state:", id, pc.iceConnectionState);
   pc.onicegatheringstatechange = () => console.log("[Connection] ICE gathering state:", id, pc.iceGatheringState);
   pc.onicecandidate = (event) => {
-    console.log("[Connection] Local ICE candidate:", id, event.candidate ? event.candidate.toJSON() : null);
+    if (event.candidate && peers.get(id) === p) {
+      sendSignal({ type: "signal", to: id, signal: { type: "candidate", candidate: event.candidate.toJSON() } });
+    }
   };
   pc.onicecandidateerror = (event) => {
     console.error("[Connection] ICE candidate error:", id, { address: event.address, port: event.port, url: event.url, errorCode: event.errorCode, errorText: event.errorText }, event);
@@ -209,186 +213,182 @@ function makePeer(name = "") {
   return p;
 }
 
-function waitIce(pc) {
-  console.log("[Connection] Waiting for ICE gathering:", pc.iceGatheringState);
-  if (pc.iceGatheringState === "complete") return Promise.resolve();
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      if (pc.iceGatheringState === "complete") {
-        console.log("[Connection] ICE gathering complete.");
-      } else {
-        console.warn("[Connection] ICE gathering wait timed out after 15000 ms:", pc.iceGatheringState);
-      }
-      pc.removeEventListener("icegatheringstatechange", check);
-      clearTimeout(timer);
-      resolve();
+function sendSignal(message) {
+  if (socket?.readyState !== WebSocket.OPEN) return false;
+  socket.send(JSON.stringify(message));
+  return true;
+}
+
+function updateConnectionControls() {
+  const registered = myId !== null && socket?.readyState === WebSocket.OPEN;
+  $("connectPeer").disabled = !registered;
+  $("disconnectPeer").disabled = !peers.size;
+  $("peerId").disabled = !registered;
+}
+
+function clearConnection(notify = true) {
+  for (const peer of [...peers.values()]) removePeer(peer, notify);
+  updateConnectionControls();
+  refresh();
+}
+
+async function handleServerMessage(message) {
+  if (message.type === "registered") {
+    if (!Number.isSafeInteger(message.id) || message.id < 1) throw Error("Invalid server user ID.");
+    myId = message.id;
+    myName = message.name;
+    $("myName").textContent = myName;
+    $("myId").textContent = String(myId);
+    $("joinButton").disabled = false;
+    $("joinStatus").textContent = "";
+    $("namePage").classList.add("hidden");
+    $("appPage").classList.remove("hidden");
+    setStatus("Online. Share your ID or enter another user's ID.");
+    updateConnectionControls();
+    return;
+  }
+  if (message.type === "error") {
+    const errors = {
+      PEER_NOT_FOUND: "That user is not online on this server.",
+      INVALID_PEER: "Enter another user's positive integer ID.",
+      INVALID_NAME: "Enter a name of 1–40 characters without control characters.",
+      RATE_LIMITED: "Too many requests. Please reconnect and try again.",
     };
-    const check = () => {
-      if (pc.iceGatheringState === "complete") finish();
-    };
-    pc.addEventListener("icegatheringstatechange", check);
-    const timer = setTimeout(finish, 15000);
-  });
-}
-
-async function output(p) {
-  await waitIce(p.pc);
-  const signal = JSON.stringify({
-    type: p.pc.localDescription.type,
-    sdp: p.pc.localDescription.sdp,
-    peerName: myName,
-  });
-  console.log("[Connection] Outgoing signaling payload:", p.id, signal);
-  return signal;
-}
-
-async function readSignal(type) {
-  let text;
-  console.log("[Connection] Reading incoming signaling:", type);
-  try {
-    text = await navigator.clipboard.readText();
-  } catch (error) {
-    console.warn("[Connection] Clipboard read unavailable; using manual signaling:", type, error);
-    text = window.prompt("Clipboard access unavailable. Paste the " + type + " here:");
-  }
-  console.log("[Connection] Incoming signaling payload:", type, text);
-  if (text === null) throw Error("Signaling cancelled.");
-  let d;
-  try {
-    d = JSON.parse(text.trim());
-  } catch {
-    throw Error("Copy valid signaling JSON before clicking this step.");
-  }
-  if (!d || d.type !== type || typeof d.sdp !== "string" || !d.sdp.trim()) {
-    throw Error("Clipboard must contain a valid " + type + ".");
-  }
-  console.log("[Connection] Incoming signaling validated:", type, d);
-  return d;
-}
-
-async function copySignal(generate) {
-  // Reserve clipboard access during the click, before WebRTC's async work.
-  const text = Promise.resolve().then(generate);
-  let copied = false;
-  try {
-    if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          "text/plain": text.then((value) => new Blob([value], { type: "text/plain" })),
-        }),
-      ]);
+    const text = errors[message.code] || "Signaling error: " + message.code;
+    if (myId === null) {
+      $("joinStatus").textContent = text;
+      socket?.close();
     } else {
-      await navigator.clipboard.writeText(await text);
+      const peer = peers.get(message.to);
+      if (peer && peer.channel?.readyState !== "open") removePeer(peer, false);
+      setStatus(text);
+      updateConnectionControls();
     }
-    copied = true;
-    console.log("[Connection] Outgoing signaling copied to clipboard.");
-  } catch (error) {
-    console.warn("[Connection] Clipboard write or signaling generation failed:", error);
-    // Still await generation: connection errors must not look like copy failures.
+    return;
   }
-  const value = await text;
-  if (!copied) {
-    console.log("[Connection] Outgoing signaling shown for manual copy:", value);
-    const result = window.prompt("Automatic copy unavailable. Copy this signaling data and send it to the other user:", value);
-    console.log("[Connection] Manual signaling prompt:", result === null ? "cancelled" : "confirmed");
-    if (result === null) return false;
+  if (message.type === "peer-ready") {
+    if (peers.has(message.peerId)) return;
+    updateConnectionControls();
+    setStatus(`Connecting to ${message.peerName} (ID ${message.peerId})…`);
+    const peer = makePeer(message.peerId, message.peerName);
+    if (message.initiator) {
+      setupChannel(peer, peer.pc.createDataChannel("chat"));
+      await peer.pc.setLocalDescription(await peer.pc.createOffer());
+      sendSignal({ type: "signal", to: peer.id, signal: { type: "offer", sdp: peer.pc.localDescription.sdp } });
+    }
+    return;
   }
-  return copied;
+  const peer = peers.get(message.from);
+  if (!peer) return;
+  if (message.type === "peer-left") {
+    removePeer(peer, false);
+    return;
+  }
+  if (message.type !== "signal") return;
+  const signal = message.signal;
+  if (!signal || !["candidate", "offer", "answer"].includes(signal.type)) return;
+  if (signal.type === "candidate") {
+    if (peer.pc.remoteDescription) await peer.pc.addIceCandidate(signal.candidate);
+    else peer.candidates.push(signal.candidate);
+    return;
+  }
+  await peer.pc.setRemoteDescription({ type: signal.type, sdp: signal.sdp });
+  for (const candidate of peer.candidates.splice(0)) await peer.pc.addIceCandidate(candidate);
+  if (signal.type === "offer") {
+    await peer.pc.setLocalDescription(await peer.pc.createAnswer());
+    sendSignal({ type: "signal", to: peer.id, signal: { type: "answer", sdp: peer.pc.localDescription.sdp } });
+  }
 }
 
-function signalingAction(id, action) {
-  $(id).onclick = async () => {
-    const buttons = [$("createOffer"), $("applyOffer"), $("applyAnswer")];
-    buttons.forEach((button) => { button.disabled = true; });
-    console.log("[Connection] Signaling action started:", id);
-    try {
-      await action();
-      console.log("[Connection] Signaling action completed:", id);
-    } catch (e) {
-      console.error("[Connection] Signaling action failed:", id, e);
-      status("Error: " + e.message);
-    } finally {
-      buttons.forEach((button) => { button.disabled = false; });
+// The UI and signaling service can be hosted independently.
+const defaultSignalUrl = new URL(window.location.href);
+defaultSignalUrl.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+defaultSignalUrl.port = "3001";
+defaultSignalUrl.pathname = "/signal";
+defaultSignalUrl.search = "";
+defaultSignalUrl.hash = "";
+$("signalingUrl").value = defaultSignalUrl.href;
+
+$("joinForm").onsubmit = (event) => {
+  event.preventDefault();
+  const name = $("displayName").value.trim();
+  if (!name) return;
+  let url;
+  try {
+    url = new URL($("signalingUrl").value.trim());
+    if (!["ws:", "wss:"].includes(url.protocol) || url.username || url.password || url.hash) throw Error("Use a ws:// or wss:// server URL without credentials or a fragment.");
+    if (window.location.protocol === "https:" && url.protocol !== "wss:") throw Error("HTTPS pages require a secure wss:// signaling server.");
+  } catch (error) {
+    $("joinStatus").textContent = error.message;
+    return;
+  }
+  if (socket && socket.readyState < WebSocket.CLOSING) return;
+  $("joinButton").disabled = true;
+  $("joinStatus").textContent = "Connecting to signaling server…";
+  const ws = new WebSocket(url.href);
+  socket = ws;
+  let queue = Promise.resolve();
+  const timeout = setTimeout(() => {
+    if (myId === null && socket === ws) {
+      $("joinStatus").textContent = "Registration timed out. Check the server URL and retry.";
+      ws.close();
+    }
+  }, 12_000);
+  ws.onopen = () => ws.send(JSON.stringify({ type: "register", name }));
+  ws.onmessage = (event) => {
+    // Preserve offer/answer/candidate order across asynchronous WebRTC work.
+    queue = queue.then(async () => {
+      if (socket !== ws || ws.readyState !== WebSocket.OPEN) return;
+      const message = JSON.parse(event.data);
+      await handleServerMessage(message);
+      if (myId !== null) clearTimeout(timeout);
+    }).catch((error) => {
+      let message = {};
+      try { message = JSON.parse(event.data) || {}; } catch { /* Invalid server JSON. */ }
+      const peer = peers.get(message.from ?? message.peerId);
+      if (peer) removePeer(peer);
+      setStatus("Connection failed: " + error.message);
+    });
+  };
+  ws.onerror = () => {
+    $("joinStatus").textContent = "Cannot reach the signaling server. Check its URL, TLS certificate, and network access.";
+  };
+  ws.onclose = () => {
+    clearTimeout(timeout);
+    if (socket !== ws) return;
+    socket = null;
+    myId = null;
+    clearConnection(false);
+    $("myId").textContent = "";
+    $("appPage").classList.add("hidden");
+    $("namePage").classList.remove("hidden");
+    $("joinButton").disabled = false;
+    if (!$("joinStatus").textContent || $("joinStatus").textContent === "Connecting to signaling server…") {
+      $("joinStatus").textContent = "Signaling connection closed. Continue to get a new ID.";
     }
   };
-}
-
-$("joinForm").onsubmit = (e) => {
-  e.preventDefault();
-  myName = $("displayName").value.trim();
-  if (!myName) return;
-  $("myName").textContent = myName;
-  $("namePage").classList.add("hidden");
-  $("appPage").classList.remove("hidden");
 };
 
-signalingAction("createOffer", async () => {
-  if (peers.has(pendingPeerId)) {
-    throw Error("Apply the answer to your pending offer before creating another.");
+$("connectForm").onsubmit = (event) => {
+  event.preventDefault();
+  const to = Number($("peerId").value);
+  if (!Number.isSafeInteger(to) || to < 1 || to === myId) {
+    setStatus("Enter another user's positive integer ID.");
+    return;
   }
-  const copied = await copySignal(async () => {
-    const p = makePeer();
-    try {
-      setupChannel(p, p.pc.createDataChannel("chat"));
-      console.log("[Connection] Creating offer:", p.id);
-      const offer = await p.pc.createOffer();
-      console.log("[Connection] Offer created; applying local description:", p.id, offer);
-      await p.pc.setLocalDescription(offer);
-      console.log("[Connection] Local offer applied:", p.id, p.pc.localDescription.toJSON());
-      status("Gathering ICE candidates for offer…");
-      const value = await output(p);
-      pendingPeerId = p.id;
-      return value;
-    } catch (e) {
-      removePeer(p);
-      throw e;
-    }
-  });
-  status(copied ? "Offer copied. Send it to the other user." : "Offer ready. Use the manual copy prompt to share it.");
-});
-
-signalingAction("applyOffer", async () => {
-  // Start the clipboard read in the click handler, before awaiting anything else.
-  const offer = readSignal("offer");
-  const copied = await copySignal(async () => {
-    const d = await offer;
-    const p = makePeer(typeof d.peerName === "string" ? d.peerName : "");
-    try {
-      console.log("[Connection] Applying remote offer:", p.id, d);
-      await p.pc.setRemoteDescription({ type: "offer", sdp: d.sdp });
-      console.log("[Connection] Remote offer applied:", p.id, p.pc.remoteDescription.toJSON());
-      console.log("[Connection] Creating answer:", p.id);
-      const answer = await p.pc.createAnswer();
-      console.log("[Connection] Answer created; applying local description:", p.id, answer);
-      await p.pc.setLocalDescription(answer);
-      console.log("[Connection] Local answer applied:", p.id, p.pc.localDescription.toJSON());
-      status("Gathering ICE candidates for answer…");
-      return await output(p);
-    } catch (e) {
-      removePeer(p);
-      throw e;
-    }
-  });
-  status(copied ? "Answer copied. Send it back to the offerer." : "Answer ready. Use the manual copy prompt to share it.");
-});
-
-signalingAction("applyAnswer", async () => {
-  const p = peers.get(pendingPeerId);
-  if (!p || p.pc.signalingState !== "have-local-offer") {
-    throw Error("Create an offer in this tab first.");
+  if (myId === null) return;
+  if (peers.has(to)) {
+    setStatus("Already connected or connecting to that user.");
+    return;
   }
-  const d = await readSignal("answer");
-  console.log("[Connection] Applying remote answer:", p.id, d);
-  await p.pc.setRemoteDescription({ type: "answer", sdp: d.sdp });
-  console.log("[Connection] Remote answer applied:", p.id, p.pc.remoteDescription.toJSON());
-  p.name = typeof d.peerName === "string" ? d.peerName : p.name || "Peer";
-  pendingPeerId = "";
-  status("Answer applied. Waiting for connection…");
-  refresh();
-});
+  const sent = sendSignal({ type: "connect", to });
+  setStatus(sent ? "Requesting connection…" : "Signaling server is offline.");
+};
+
+$("disconnectPeer").onclick = () => {
+  const peer = peers.get(activePeerId) || [...peers.values()][0];
+  if (peer) removePeer(peer);
+};
 
 let attachmentPeerId = "";
 $("attachFile").onclick = () => {
@@ -402,14 +402,14 @@ $("attachmentInput").onchange = () => {
   const peer = peers.get(attachmentPeerId);
   if (!file) return;
   if (peer?.channel?.readyState !== "open") {
-    status("The selected user is no longer connected.");
+    setStatus("The selected user is no longer connected.");
     return;
   }
   try {
     const channel = peer.pc.createDataChannel(FileTransfer.prefix + crypto.randomUUID(), { ordered: true });
     setupFileTransfer(peer, channel, file);
   } catch (error) {
-    status("Cannot attach file: " + error.message);
+    setStatus("Cannot attach file: " + error.message);
   } finally {
     $("attachmentInput").value = "";
   }
@@ -424,7 +424,7 @@ $("sendMessage").onclick = () => {
     addMessage(p, m, true);
     $("chatMessage").value = "";
   } catch {
-    status("Message could not be sent. Check the peer connection.");
+    setStatus("Message could not be sent. Check the peer connection.");
   }
 };
 

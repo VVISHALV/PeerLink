@@ -3,18 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>PeerLink — Serverless WebRTC</title>
+    <title>PeerLink — Peer-to-peer chat</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="version-bar" aria-label="App version">
       <!-- Update this version number manually when releasing changes. -->
-      <span>Version 1.0.0</span>
+      <span>Version 1.1.0</span>
     </header>
     <section id="namePage">
       <h1>PeerLink</h1>
       <p class="muted">
-        Serverless WebRTC peer connection with manual signaling.
+        Direct WebRTC chat and file sharing with independent signaling.
       </p>
       <div class="panel">
         <h2>Welcome</h2>
@@ -27,27 +27,29 @@
             autocomplete="nickname"
             required
           />
-          <p><button type="submit">Continue</button></p>
+          <label for="signalingUrl">Signaling server URL</label>
+          <input id="signalingUrl" type="url" placeholder="ws://localhost:3001/signal" required />
+          <p><button id="joinButton" type="submit">Continue</button></p>
+          <p id="joinStatus" class="muted" role="status" aria-live="polite"></p>
         </form>
       </div>
     </section>
     <section id="appPage" class="hidden">
       <h1>PeerLink</h1>
       <p>
-        Signed in as <strong id="myName"></strong>
+        Signed in as <strong id="myName"></strong> · Your ID: <strong id="myId" class="pill"></strong>
       </p>
       <div class="panel signaling">
-        <h2>Signaling exchange</h2>
-        <p class="muted">
-          Send the copied offer to the other user. They copy it and click step 2,
-          then send their copied answer back. Copy their answer and click step 3.
-          Clipboard access requires HTTPS or localhost and browser permission.
-        </p>
-        <div class="row" aria-label="Signaling actions">
-          <button id="createOffer" type="button">1. Create offer and copy</button>
-          <button id="applyOffer" type="button">2. Apply offer and copy answer</button>
-          <button id="applyAnswer" type="button">3. Apply answer</button>
-        </div>
+        <h2>Connect to users</h2>
+        <p class="muted">Connect to multiple users by entering each ID. Everyone must be online on the same signaling server. Select a connected user below to chat or share files.</p>
+        <form id="connectForm">
+          <label for="peerId">Other user's ID</label>
+          <div class="row">
+            <input id="peerId" type="number" min="1" step="1" placeholder="Enter user ID" required />
+            <button id="connectPeer" type="submit" disabled>Connect</button>
+            <button id="disconnectPeer" type="button" disabled>Disconnect selected</button>
+          </div>
+        </form>
         <p id="signalStatus" class="muted" aria-live="polite">Ready.</p>
       </div>
       <div class="panel chat-workspace">
@@ -55,8 +57,7 @@
           <h2>Connected users <span id="userCount" class="pill">0</span></h2>
           <div id="users">
             <p class="muted">
-              No connected users yet. Exchange an offer and answer with another
-              browser.
+              No connected user yet. Enter the other user's ID to connect.
             </p>
           </div>
         </aside>
@@ -75,9 +76,9 @@
         </section>
       </div>
       <p class="muted">
-        No server-based discovery is provided. Connected users are peers you
-        explicitly connect to. STUN helps with network connectivity; it does not
-        discover users.
+        The signaling server exchanges connection details only. Chat messages and
+        files travel directly between peers and are not stored on the server.
+        IDs identify online sessions, not authenticated accounts.
       </p>
     </section>
     <script src="./file-transfer.js"></script>
