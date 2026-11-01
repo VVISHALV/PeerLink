@@ -9,6 +9,7 @@ let nextId = 1;
 
 
 server.on("connection", (ws) => {
+  
   const client = { ws, id: null, name: "" };
   console.log("connected");
 
