@@ -50,7 +50,6 @@ export function createSignalingServer({ port = 3001, host = "0.0.0.0" } = {}) {
       }
 
       if (message.type === "connect") {
-        // A consistent initiator also handles both users clicking Connect together.
         send(client, { type: "peer-ready", peerId: peer.id, peerName: peer.name, initiator: client.id < peer.id });
         send(peer, { type: "peer-ready", peerId: client.id, peerName: client.name, initiator: peer.id < client.id });
       } else if (message.type === "signal") {
@@ -63,7 +62,6 @@ export function createSignalingServer({ port = 3001, host = "0.0.0.0" } = {}) {
     ws.on("close", (code, reason) => {
       console.log("disconnected", client.id, code, reason.toString());
       if (!clients.delete(client.id)) return;
-      // No pairing records: let all online browsers discard this ID if connected.
       for (const peer of clients.values()) {
         send(peer, { type: "peer-left", from: client.id, reason: "Peer went offline" });
       }
