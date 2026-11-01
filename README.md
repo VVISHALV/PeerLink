@@ -27,6 +27,16 @@ Open `http://localhost:8080`, enter a name and `ws://localhost:3001/signal`. Sha
 
 For LAN devices, replace localhost with the server's LAN IP and allow ports 8080 and 3001. File receiving requires Chrome/Edge on HTTPS or localhost. For HTTPS deployments, use a TLS reverse proxy supporting WebSocket upgrades and a `wss://host/signal` URL.
 
+## Docker
+
+```sh
+cd "Signaling Server"
+docker build -t peerlink-signaling .
+docker run -p 3001:3001 peerlink-signaling
+```
+
+Use `-e PORT=...` to change the port (also update `-p`). `.dockerignore` keeps `node_modules`, logs and `.env` out of the image.
+
 ## Signaling
 
 The server stores only `{ id, name, ws }` per user, not pairings or sessions. IDs start at 1 and reset on restart. Disconnected clients are removed and online users notified.
