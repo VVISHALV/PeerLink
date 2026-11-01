@@ -4,7 +4,7 @@ WebRTC chat and file sharing with multiple peers. Chat and files travel directly
 
 ## Structure
 
-- `Client/`: static HTML, CSS and JavaScript.
+- `docs/`: static HTML, CSS and JavaScript.
 - `Signaling Server/server.js`: standalone WebSocket relay with an in-memory client map.
 
 ## Run
@@ -20,7 +20,7 @@ npm start
 From the repository root in another terminal, serve the client:
 
 ```sh
-python3 -m http.server 8080 --directory Client
+python3 -m http.server 8080 --directory docs
 ```
 
 Open `http://localhost:8080`, enter a name and `ws://localhost:3001/signal`. Share your assigned ID and connect to other users by ID. Select a user to chat or send files; disconnecting one user does not affect other connections.
@@ -38,7 +38,7 @@ The server stores only `{ id, name, ws }` per user, not pairings or sessions. ID
 
 `PORT` defaults to `3001`; `HOST` defaults to `0.0.0.0`. No custom HTTP endpoints or persistence. Full signaling payloads are printed with `console.log`; logs contain sensitive connection data, so keep them private. This basic relay has no authentication and is intended for trusted users/networks.
 
-WebRTC uses Google's public STUN server. Some networks need TURN (not included). For LAN-only connectivity, set `iceServers: []` in `Client/script.js`.
+WebRTC uses Google's public STUN server. Some networks need TURN (not included). For LAN-only connectivity, set `iceServers: []` in `docs/script.js`.
 
 ## Debug in ZCode
 
