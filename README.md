@@ -11,9 +11,7 @@ Enter a name and choose how to connect:
 - **Signaling server:** Share your assigned ID or enter another user's ID. The server exchanges the connection details needed for your browsers to connect.
 - **Manual signaling:** Copy and exchange an offer and answer with the other person. This connects your browsers without using a signaling server.
 
-Once connected, select a user to send messages or attach a file. Messages and files travel directly between browsers through WebRTC, not through the signaling server. Disconnecting one user does not affect your other connections.
-
-Chat history is kept only in the current browser session, not saved on the signaling server. Direct connections depend on your network; some networks may prevent a connection.
+Messages and files travel directly between browsers through WebRTC, not through the signaling server.
 
 ## Project layout
 
