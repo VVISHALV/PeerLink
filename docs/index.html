@@ -27,8 +27,11 @@
             autocomplete="nickname"
             required
           />
-          <label for="signalingUrl">Signaling server URL</label>
-          <input id="signalingUrl" type="url" placeholder="ws://localhost:3001/signal" required />
+          <label for="signalingUrl">Signaling server</label>
+          <select id="signalingUrl">
+            <option value="wss://peerlink-server-production.up.railway.app/signal">Peerlink signaling server 1</option>
+            <option value="manual">Manual signaling</option>
+          </select>
           <p><button id="joinButton" type="submit">Continue</button></p>
           <p id="joinStatus" class="muted" role="status" aria-live="polite"></p>
         </form>
@@ -37,9 +40,11 @@
     <section id="appPage" class="hidden">
       <h1>PeerLink</h1>
       <p>
-        Signed in as <strong id="myName"></strong> · Your ID: <strong id="myId" class="pill"></strong>
+        Signed in as <strong id="myName"></strong><span id="serverIdentity"> · Your ID: <strong id="myId" class="pill"></strong></span>
+        <span id="manualIdentity" class="hidden"> · Manual signaling</span>
       </p>
       <div class="panel signaling">
+        <div id="serverSignaling">
         <h2>Connect to users</h2>
         <p class="muted">Connect to multiple users by entering each ID. Everyone must be online on the same signaling server. Select a connected user below to chat or share files.</p>
         <form id="connectForm">
@@ -47,9 +52,30 @@
           <div class="row">
             <input id="peerId" type="number" min="1" step="1" placeholder="Enter user ID" required />
             <button id="connectPeer" type="submit" disabled>Connect</button>
-            <button id="disconnectPeer" type="button" disabled>Disconnect selected</button>
           </div>
         </form>
+        </div>
+        <div id="manualSignaling" class="hidden">
+          <h2>Manual signaling</h2>
+          <p class="muted">1. One user creates an offer and sends it to the other user.</p>
+          <p class="muted">2. The other user pastes the offer, creates an answer and sends it back.</p>
+          <p class="muted">3. The first user pastes the answer and selects Apply answer. Exchange these details privately; no signaling server is used.</p>
+          <div class="row">
+            <button id="createOffer" type="button">Create offer</button>
+            <button id="resetManual" type="button" disabled>Cancel pending exchange</button>
+          </div>
+          <label for="manualLocal">Your offer / answer — send this to the other user</label>
+          <textarea id="manualLocal" rows="4" readonly spellcheck="false" placeholder="Create an offer or answer to generate connection details."></textarea>
+          <div class="row"><button id="copyManual" type="button" disabled>Copy offer / answer</button></div>
+          <label for="manualRemote">Other user's offer / answer</label>
+          <textarea id="manualRemote" rows="4" spellcheck="false" placeholder="Paste the other user's connection details here."></textarea>
+          <div class="row">
+            <button id="pasteManual" type="button">Paste from clipboard</button>
+            <button id="createAnswer" type="button">Create answer from offer</button>
+            <button id="applyAnswer" type="button" disabled>Apply answer</button>
+          </div>
+        </div>
+        <div class="row"><button id="disconnectPeer" type="button" disabled>Disconnect selected</button></div>
         <p id="signalStatus" class="muted" aria-live="polite">Ready.</p>
       </div>
       <div class="panel chat-workspace">
@@ -83,5 +109,6 @@
     </section>
     <script src="./file-transfer.js"></script>
     <script src="./script.js"></script>
+    <script src="./manual-signaling.js"></script>
   </body>
 </html>

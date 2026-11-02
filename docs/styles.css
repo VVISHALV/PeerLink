@@ -100,7 +100,9 @@ label {
   font-weight: 650;
 }
 
-input {
+input,
+select,
+textarea {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--border);
@@ -133,13 +135,21 @@ button:hover:not(:disabled) {
   background: var(--accent-hover);
 }
 
-:where(button, input):focus-visible {
+textarea {
+  resize: vertical;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
+:where(button, input, select, textarea):focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
 
 button:disabled,
-input:disabled {
+input:disabled,
+select:disabled,
+textarea:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }

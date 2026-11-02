@@ -6,6 +6,9 @@ let myName = "",
   socket = null,
   peers = new Map(),
   activePeerId = "";
+let manualMode = false;
+let manualPending = null;
+let manualBusy = false;
 
 function setStatus(s) {
   console.log("[Connection] Status:", s);
@@ -105,8 +108,9 @@ function refresh() {
   if (!list.length) {
     const p = document.createElement("p");
     p.className = "muted";
-    p.textContent =
-      "No connected user yet. Enter the other user's ID to connect.";
+    p.textContent = manualMode
+      ? "No connected user yet. Exchange an offer and answer to connect."
+      : "No connected user yet. Enter the other user's ID to connect.";
     box.append(p);
   }
 
@@ -136,7 +140,12 @@ function refresh() {
 
 function removePeer(peer, notify = true) {
   if (peers.get(peer.id) !== peer || !peers.delete(peer.id)) return;
-  if (notify) sendSignal({ type: "disconnect", to: peer.id });
+  if (notify && !manualMode) sendSignal({ type: "disconnect", to: peer.id });
+  if (manualPending?.peer === peer) {
+    manualPending = null;
+    $("manualLocal").value = "";
+    $("manualRemote").value = "";
+  }
   updateConnectionControls();
   console.log("[Connection] Removing peer:", peer.id, { name: peer.name, connectionState: peer.pc.connectionState, signalingState: peer.pc.signalingState, channelState: peer.channel?.readyState });
   peer.messages.forEach((message) => message.transfer?.cancel());
@@ -180,7 +189,7 @@ function makePeer(id, name = "") {
   pc.oniceconnectionstatechange = () => console.log("[Connection] ICE connection state:", id, pc.iceConnectionState);
   pc.onicegatheringstatechange = () => console.log("[Connection] ICE gathering state:", id, pc.iceGatheringState);
   pc.onicecandidate = (event) => {
-    if (event.candidate && peers.get(id) === p) {
+    if (!manualMode && event.candidate && peers.get(id) === p) {
       sendSignal({ type: "signal", to: id, signal: { type: "candidate", candidate: event.candidate.toJSON() } });
     }
   };
@@ -224,6 +233,13 @@ function updateConnectionControls() {
   $("connectPeer").disabled = !registered;
   $("disconnectPeer").disabled = !peers.size;
   $("peerId").disabled = !registered;
+  $("createOffer").disabled = manualBusy || !!manualPending;
+  $("createAnswer").disabled = manualBusy || !!manualPending;
+  $("applyAnswer").disabled = manualBusy || manualPending?.role !== "offer" || !!manualPending?.applied;
+  $("resetManual").disabled = manualBusy || !manualPending;
+  $("copyManual").disabled = manualBusy || !$("manualLocal").value;
+  $("manualRemote").disabled = manualBusy;
+  $("pasteManual").disabled = manualBusy;
 }
 
 function clearConnection(notify = true) {
@@ -300,19 +316,28 @@ async function handleServerMessage(message) {
   }
 }
 
-// The UI and signaling service can be hosted independently.
-const defaultSignalUrl = new URL(window.location.href);
-defaultSignalUrl.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-defaultSignalUrl.port = "3001";
-defaultSignalUrl.pathname = "/signal";
-defaultSignalUrl.search = "";
-defaultSignalUrl.hash = "";
-$("signalingUrl").value = defaultSignalUrl.href;
-
 $("joinForm").onsubmit = (event) => {
   event.preventDefault();
   const name = $("displayName").value.trim();
-  if (!name) return;
+  if (!name || name.length > 40 || /[\u0000-\u001f\u007f]/.test(name)) {
+    $("joinStatus").textContent = "Enter a name of 1–40 characters without control characters.";
+    return;
+  }
+  manualMode = $("signalingUrl").value === "manual";
+  $("serverSignaling").classList.toggle("hidden", manualMode);
+  $("serverIdentity").classList.toggle("hidden", manualMode);
+  $("manualSignaling").classList.toggle("hidden", !manualMode);
+  $("manualIdentity").classList.toggle("hidden", !manualMode);
+  if (manualMode) {
+    myName = name;
+    $("myName").textContent = name;
+    $("joinStatus").textContent = "";
+    $("namePage").classList.add("hidden");
+    $("appPage").classList.remove("hidden");
+    setStatus("Create an offer, or paste the other user's offer to create an answer.");
+    refresh();
+    return;
+  }
   let url;
   try {
     url = new URL($("signalingUrl").value.trim());

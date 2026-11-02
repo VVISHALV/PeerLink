@@ -23,9 +23,21 @@ From the repository root in another terminal, serve the client:
 python3 -m http.server 8080 --directory docs
 ```
 
-Open `http://localhost:8080`, enter a name and `ws://localhost:3001/signal`. Share your assigned ID and connect to other users by ID. Select a user to chat or send files; disconnecting one user does not affect other connections.
+Open `http://localhost:8080`, enter a name and choose **Peerlink signaling server 1** (the default, `wss://peerlink-server-production.up.railway.app/signal`) or **Manual signaling**. In server mode, share your assigned ID and connect to other users by ID. Select a user to chat or send files; disconnecting one user does not affect other connections.
 
-For LAN devices, replace localhost with the server's LAN IP and allow ports 8080 and 3001. File receiving requires Chrome/Edge on HTTPS or localhost. For HTTPS deployments, use a TLS reverse proxy supporting WebSocket upgrades and a `wss://host/signal` URL.
+To use your own signaling server, change the server option value in `docs/index.html` to your `ws://localhost:3001/signal` or deployed `wss://host/signal` URL. HTTPS pages require `wss://`.
+
+### Manual signaling
+
+Both users choose Manual signaling after entering their names:
+
+1. One user selects **Create offer**, waits for connection details, then selects **Copy offer / answer** and sends the offer privately to the other user.
+2. The other user selects **Paste from clipboard** (or pastes into the box), selects **Create answer from offer**, then copies and sends the answer back.
+3. The first user pastes the answer and selects **Apply answer**. Chat and file sharing work as usual once connected.
+
+No signaling server is contacted in manual mode. Offers/answers contain the name and complete SDP with gathered ICE candidates; treat them as private connection data. Use **Cancel pending exchange** to retry or prepare another exchange; already connected users are kept. Clipboard buttons need browser permission and HTTPS/localhost; ordinary copy/paste remains available if access is denied.
+
+For LAN devices, replace localhost with the server's LAN IP and allow port 8080 (and 3001 if using a local signaling server). File receiving requires Chrome/Edge on HTTPS or localhost. WebRTC still uses the configured STUN server in both modes.
 
 ## Docker
 
