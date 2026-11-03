@@ -1,6 +1,6 @@
 # PeerLink
 
-PeerLink is a browser-based app for chatting and sharing files directly with other people using WebRTC. You can connect to multiple users and chat or share files with each one separately.
+PeerLink is a browser-based app for chatting and sharing files directly with other people using WebRTC.
 
 **[Open PeerLink](https://vvishalv.github.io/PeerLink/)**
 
